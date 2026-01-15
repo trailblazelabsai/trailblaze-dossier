@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trailblaze Labs - Client Relationship Portal</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Plus Jakarta Sans', sans-serif; }
+    body { background: #0a0a0f; margin: 0; }
+    
+    @keyframes float {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-20px) scale(1.02); }
+    }
+    
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.15; }
+      50% { opacity: 0.25; }
+    }
+    
+    .float-orb { animation: float 8s ease-in-out infinite; }
+    .float-orb-2 { animation: float 12s ease-in-out infinite; animation-delay: 2s; }
+    .float-orb-3 { animation: float 10s ease-in-out infinite; animation-delay: 4s; }
+    .pulse-glow { animation: pulse-glow 4s ease-in-out infinite; }
+    
+    .noise-overlay {
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      mix-blend-mode: overlay;
+    }
+    
+    .grid-bg {
+      background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), 
+                        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+    
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2371717a'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 1rem center;
+      background-size: 1.5rem;
+    }
+    
+    .focus-glow {
+      transition: box-shadow 0.3s ease;
+    }
+    
+    .focus-glow:focus {
+      box-shadow: 0 0 30px rgba(249, 115, 22, 0.15);
+    }
+    
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    .animate-spin { animation: spin 1s linear infinite; }
+    
+    @keyframes dot-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    .dot-pulse { animation: dot-pulse 2s ease-in-out infinite; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <script type="text/babel">
+    const { useState } = React;
+
+    const TrailblazeClientPortal = () => {
+      const [formData, setFormData] = useState({
+        clientName: '',
+        engagementMonth: '',
+        engagementYear: new Date().getFullYear().toString(),
+        isProspect: false,
+        practices: {
+          education: false,
+          strategy: false,
+          builds: false
+        },
+        workDelivered: '',
+        activeWork: '',
+        futureWork: '',
+        comments: ''
+      });
+      
+      const [isSubmitting, setIsSubmitting] = useState(false);
+      const [submitStatus, setSubmitStatus] = useState(null);
+      const [focusedField, setFocusedField] = useState(null);
+
+      const months = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+
+      const years = Array.from({ length: 10 }, (_, i) => (new Date().getFullYear() - i).toString());
+
+      const handleInputChange = (field, value) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+      };
+
+      const handlePracticeToggle = (practice) => {
+        setFormData(prev => ({
+          ...prev,
+          practices: {
+            ...prev.practices,
+            [practice]: !prev.practices[practice]
+          }
+        }));
+      };
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        setSubmitStatus(null);
+
+        const practicesArray = [];
+        if (formData.practices.education) practicesArray.push('Education & Training');
+        if (formData.practices.strategy) practicesArray.push('Strategy & Fractional Leadership');
+        if (formData.practices.builds) practicesArray.push('Builds & Projects');
+
+        const submissionData = {
+          timestamp: new Date().toISOString(),
+          clientName: formData.clientName,
+          status: formData.isProspect ? 'Prospect' : 'Client',
+          engagementDate: `${formData.engagementMonth} ${formData.engagementYear}`,
+          practices: practicesArray.join(', '),
+          workDelivered: formData.workDelivered,
+          activeWork: formData.activeWork,
+          futureWork: formData.futureWork,
+          comments: formData.comments
+        };
+
+        try {
+          // ============================================
+          // IMPORTANT: Replace this URL with your 
+          // Google Apps Script Web App URL
+          // ============================================
+          const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx7-Gw2HoUisIcdZiTeBsUlYkj-_CfKU9L2sru0O-bwMF4HJaq-oH0w6g2NxulLU8ry/exec';
+          
+          if (GOOGLE_SCRIPT_URL === 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
+            // Demo mode - simulate submission
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            console.log('Demo mode - Submission data:', submissionData);
+          } else {
+            // Production mode - send to Google Sheets
+            await fetch(GOOGLE_SCRIPT_URL, {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(submissionData)
+            });
+          }
+          
+          setSubmitStatus('success');
+          
+          // Reset form
+          setFormData({
+            clientName: '',
+            engagementMonth: '',
+            engagementYear: new Date().getFullYear().toString(),
+            isProspect: false,
+            practices: { education: false, strategy: false, builds: false },
+            workDelivered: '',
+            activeWork: '',
+            futureWork: '',
+            comments: ''
+          });
+        } catch (error) {
+          console.error('Submission error:', error);
+          setSubmitStatus('error');
+        } finally {
+          setIsSubmitting(false);
+        }
+      };
+
+      const practiceCards = [
+        {
+          id: 'education',
+          title: 'Education & Training',
+          description: 'Workshops, enablement, and AI literacy programs',
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342M6.75 15a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm0 0v-3.675A55.378 55.378 0 0 1 12 8.443m-7.007 11.55A5.981 5.981 0 0 0 6.75 15.75v-1.5" />
+            </svg>
+          )
+        },
+        {
+          id: 'strategy',
+          title: 'Strategy & Fractional Leadership',
+          description: 'AI roadmaps, executive advising, and strategic planning',
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605" />
+            </svg>
+          )
+        },
+        {
+          id: 'builds',
+          title: 'Builds & Projects',
+          description: 'Custom AI solutions, prototypes, and implementations',
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z" />
+            </svg>
+          )
+        }
+      ];
+
+      return (
+        <div className="min-h-screen text-white overflow-hidden relative" style={{ background: '#0a0a0f' }}>
+          {/* Animated background elements */}
+          <div className="fixed inset-0 overflow-hidden pointer-events-none">
+            <div className="float-orb absolute w-[600px] h-[600px] rounded-full blur-3xl pulse-glow" style={{ top: '-20%', left: '-10%', background: 'linear-gradient(to bottom right, rgba(249, 115, 22, 0.2), rgba(239, 68, 68, 0.1), transparent)' }} />
+            <div className="float-orb-2 absolute w-[800px] h-[800px] rounded-full blur-3xl pulse-glow" style={{ bottom: '-30%', right: '-15%', background: 'linear-gradient(to top left, rgba(245, 158, 11, 0.15), rgba(234, 88, 12, 0.1), transparent)', animationDelay: '2s' }} />
+            <div className="float-orb-3 absolute w-[400px] h-[400px] rounded-full blur-3xl pulse-glow" style={{ top: '40%', right: '10%', background: 'linear-gradient(to bottom left, rgba(234, 179, 8, 0.1), rgba(249, 115, 22, 0.05), transparent)', animationDelay: '4s' }} />
+            <div className="absolute inset-0 grid-bg opacity-30" />
+            <div className="absolute inset-0 noise-overlay opacity-40" />
+          </div>
+
+          {/* Main content */}
+          <div className="relative z-10 max-w-4xl mx-auto px-6 py-12">
+            {/* Header */}
+            <header className="text-center mb-16">
+              <div className="inline-flex items-center gap-3 mb-6">
+                <div className="relative">
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(to bottom right, #f97316, #f59e0b, #eab308)', boxShadow: '0 10px 40px rgba(249, 115, 22, 0.3)' }}>
+                    <svg viewBox="0 0 24 24" fill="none" className="w-7 h-7 text-white">
+                      <path d="M12 2L4 7v10l8 5 8-5V7l-8-5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" fill="rgba(255,255,255,0.1)"/>
+                      <path d="M12 6v12M8 8.5l4 2.5 4-2.5M8 15.5l4-2.5 4 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                  </div>
+                  <div className="absolute -inset-1 rounded-xl opacity-50 blur-lg -z-10" style={{ background: 'linear-gradient(to bottom right, #f97316, #f59e0b, #eab308)' }} />
+                </div>
+                <span className="text-2xl font-bold tracking-tight">
+                  <span className="text-white">Trailblaze</span>
+                  <span style={{ color: '#fb923c' }}> Labs</span>
+                </span>
+              </div>
+              
+              <h1 className="text-4xl md:text-5xl font-bold mb-4 leading-tight" style={{ background: 'linear-gradient(to right, white, #fed7aa, #fdba74)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                Client Relationship Portal
+              </h1>
+              <p className="text-lg max-w-2xl mx-auto leading-relaxed" style={{ color: '#a1a1aa' }}>
+                Capture and track client engagements across our three practice areas. 
+                Your single source of truth for relationship management.
+              </p>
+            </header>
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-8">
+              {/* Client Info Section */}
+              <section className="space-y-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="h-px flex-1" style={{ background: 'linear-gradient(to right, transparent, #3f3f46, transparent)' }} />
+                  <span className="text-xs font-semibold tracking-widest uppercase" style={{ color: '#71717a' }}>Client Information</span>
+                  <div className="h-px flex-1" style={{ background: 'linear-gradient(to right, transparent, #3f3f46, transparent)' }} />
+                </div>
+
+                {/* Client Name */}
+                <div className="relative group">
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#d4d4d8' }}>
+                    Organization Name
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={formData.clientName}
+                      onChange={(e) => handleInputChange('clientName', e.target.value)}
+                      onFocus={() => setFocusedField('clientName')}
+                      onBlur={() => setFocusedField(null)}
+                      placeholder="Enter client or prospect name"
+                      required
+                      className="w-full px-5 py-4 rounded-xl text-white focus:outline-none transition-all duration-300 focus-glow"
+                      style={{ 
+                        background: 'rgba(24, 24, 27, 0.5)', 
+                        border: '1px solid #27272a',
+                        borderColor: focusedField === 'clientName' ? 'rgba(249, 115, 22, 0.5)' : '#27272a'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Client vs Prospect Toggle */}
+                <div className="flex items-center gap-4">
+                  <span className="text-sm" style={{ color: '#a1a1aa' }}>Status:</span>
+                  <button
+                    type="button"
+                    onClick={() => handleInputChange('isProspect', !formData.isProspect)}
+                    className="relative inline-flex items-center gap-2 px-1 py-1 rounded-full"
+                    style={{ background: 'rgba(24, 24, 27, 0.5)', border: '1px solid #27272a' }}
+                  >
+                    <span 
+                      className="px-4 py-2 rounded-full text-sm font-medium transition-all duration-300"
+                      style={{ 
+                        background: !formData.isProspect ? 'linear-gradient(to right, #f97316, #f59e0b)' : 'transparent',
+                        color: !formData.isProspect ? 'white' : '#71717a',
+                        boxShadow: !formData.isProspect ? '0 10px 30px rgba(249, 115, 22, 0.3)' : 'none'
+                      }}
+                    >
+                      Client
+                    </span>
+                    <span 
+                      className="px-4 py-2 rounded-full text-sm font-medium transition-all duration-300"
+                      style={{ 
+                        background: formData.isProspect ? 'linear-gradient(to right, #f97316, #f59e0b)' : 'transparent',
+                        color: formData.isProspect ? 'white' : '#71717a',
+                        boxShadow: formData.isProspect ? '0 10px 30px rgba(249, 115, 22, 0.3)' : 'none'
+                      }}
+                    >
+                      Prospect
+                    </span>
+                  </button>
+                </div>
+
+                {/* Engagement Date */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{ color: '#d4d4d8' }}>
+                      {formData.isProspect ? 'Pipeline Entry Month' : 'Engagement Start Month'}
+                    </label>
+                    <select
+                      value={formData.engagementMonth}
+                      onChange={(e) => handleInputChange('engagementMonth', e.target.value)}
+                      required
+                      className="w-full px-5 py-4 rounded-xl text-white focus:outline-none transition-all duration-300 cursor-pointer appearance-none focus-glow"
+                      style={{ background: 'rgba(24, 24, 27, 0.5)', border: '1px solid #27272a' }}
+                    >
+                      <option value="" disabled>Select month</option>
+                      {months.map(month => (
+                        <option key={month} value={month} style={{ background: '#18181b' }}>{month}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{ color: '#d4d4d8' }}>
+                      Year
+                    </label>
+                    <select
+                      value={formData.engagementYear}
+                      onChange={(e) => handleInputChange('engagementYear', e.target.value)}
+                      required
+                      className="w-full px-5 py-4 rounded-xl text-white focus:outline-none transition-all duration-300 cursor-pointer appearance-none focus-glow"
+                      style={{ background: 'rgba(24, 24, 27, 0.5)', border: '1px solid #27272a' }}
+                    >
+                      {years.map(year => (
+                        <option key={year} value={year} style={{ background: '#18181b' }}>{year}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </section>
+
+              {/* Practice Areas Section */}
+              <section className="space-y-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="h-px flex-1" style={{ background: 'linear-gradient(to right, transparent, #3f3f46, transparent)' }} />
+                  <span className="text-xs font-semibold tracking-widest uppercase" style={{ color: '#71717a' }}>Practice Areas</span>
+                  <div className="h-px flex-1" style={{ background: 'linear-gradient(to right, transparent, #3f3f46, transparent)' }} />
+                </div>
+
+                <p className="text-sm mb-4" style={{ color: '#71717a' }}>Select all that apply to this engagement</p>
+
+                <div className="grid gap-4">
+                  {practiceCards.map((practice) => (
+                    <button
+                      key={practice.id}
+                      type="button"
+                      onClick={() => handlePracticeToggle(practice.id)}
+                      className="relative group flex items-center gap-5 p-5 rounded-2xl transition-all duration-300 text-left"
+                      style={{ 
+                        background: formData.practices[practice.id] 
+                          ? 'linear-gradient(to right, rgba(249, 115, 22, 0.1), rgba(245, 158, 11, 0.05))' 
+                          : 'rgba(24, 24, 27, 0.3)',
+                        border: `1px solid ${formData.practices[practice.id] ? 'rgba(249, 115, 22, 0.5)' : '#27272a'}`,
+                        boxShadow: formData.practices[practice.id] ? '0 10px 40px rgba(249, 115, 22, 0.1)' : 'none'
+                      }}
+                    >
+                      {/* Checkbox indicator */}
+                      <div 
+                        className="flex-shrink-0 w-6 h-6 rounded-lg flex items-center justify-center transition-all duration-300"
+                        style={{ 
+                          background: formData.practices[practice.id] ? 'linear-gradient(to bottom right, #f97316, #f59e0b)' : 'transparent',
+                          border: `2px solid ${formData.practices[practice.id] ? '#f97316' : '#3f3f46'}`
+                        }}
+                      >
+                        {formData.practices[practice.id] && (
+                          <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+
+                      {/* Icon */}
+                      <div 
+                        className="flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300"
+                        style={{ 
+                          background: formData.practices[practice.id] 
+                            ? 'linear-gradient(to bottom right, rgba(249, 115, 22, 0.3), rgba(245, 158, 11, 0.2))' 
+                            : 'rgba(39, 39, 42, 0.5)',
+                          color: formData.practices[practice.id] ? '#fb923c' : '#71717a'
+                        }}
+                      >
+                        {practice.icon}
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <h3 
+                          className="font-semibold mb-1 transition-colors duration-300"
+                          style={{ color: formData.practices[practice.id] ? 'white' : '#d4d4d8' }}
+                        >
+                          {practice.title}
+                        </h3>
+                        <p className="text-sm" style={{ color: '#71717a' }}>{practice.description}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              {/* Work Details Section */}
+              <section className="space-y-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="h-px flex-1" style={{ background: 'linear-gradient(to right, transparent, #3f3f46, transparent)' }} />
+                  <span className="text-xs font-semibold tracking-widest uppercase" style={{ color: '#71717a' }}>Work Details</span>
+                  <div className="h-px flex-1" style={{ background: 'linear-gradient(to right, transparent, #3f3f46, transparent)' }} />
+                </div>
+
+                {/* Work Delivered */}
+                <div className="relative">
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#d4d4d8' }}>
+                    <span className="inline-flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full" style={{ background: '#22c55e' }} />
+                      Work Delivered
+                    </span>
+                  </label>
+                  <textarea
+                    value={formData.workDelivered}
+                    onChange={(e) => handleInputChange('workDelivered', e.target.value)}
+                    onFocus={() => setFocusedField('workDelivered')}
+                    onBlur={() => setFocusedField(null)}
+                    placeholder="Describe completed deliverables, projects, and outcomes..."
+                    rows={3}
+                    className="w-full px-5 py-4 rounded-xl text-white focus:outline-none transition-all duration-300 resize-none focus-glow"
+                    style={{ 
+                      background: 'rgba(24, 24, 27, 0.5)', 
+                      border: '1px solid #27272a',
+                      borderColor: focusedField === 'workDelivered' ? 'rgba(34, 197, 94, 0.5)' : '#27272a'
+                    }}
+                  />
+                </div>
+
+                {/* Active Work */}
+                <div className="relative">
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#d4d4d8' }}>
+                    <span className="inline-flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full dot-pulse" style={{ background: '#f97316' }} />
+                      Active Work Underway
+                    </span>
+                  </label>
+                  <textarea
+                    value={formData.activeWork}
+                    onChange={(e) => handleInputChange('activeWork', e.target.value)}
+                    onFocus={() => setFocusedField('activeWork')}
+                    onBlur={() => setFocusedField(null)}
+                    placeholder="Describe current projects, ongoing engagements, and in-progress work..."
+                    rows={3}
+                    className="w-full px-5 py-4 rounded-xl text-white focus:outline-none transition-all duration-300 resize-none focus-glow"
+                    style={{ 
+                      background: 'rgba(24, 24, 27, 0.5)', 
+                      border: '1px solid #27272a',
+                      borderColor: focusedField === 'activeWork' ? 'rgba(249, 115, 22, 0.5)' : '#27272a'
+                    }}
+                  />
+                </div>
+
+                {/* Future Work */}
+                <div className="relative">
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#d4d4d8' }}>
+                    <span className="inline-flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full" style={{ background: '#3b82f6' }} />
+                      Potential Future Work
+                    </span>
+                  </label>
+                  <textarea
+                    value={formData.futureWork}
+                    onChange={(e) => handleInputChange('futureWork', e.target.value)}
+                    onFocus={() => setFocusedField('futureWork')}
+                    onBlur={() => setFocusedField(null)}
+                    placeholder="Describe opportunities, proposed projects, and expansion possibilities..."
+                    rows={3}
+                    className="w-full px-5 py-4 rounded-xl text-white focus:outline-none transition-all duration-300 resize-none focus-glow"
+                    style={{ 
+                      background: 'rgba(24, 24, 27, 0.5)', 
+                      border: '1px solid #27272a',
+                      borderColor: focusedField === 'futureWork' ? 'rgba(59, 130, 246, 0.5)' : '#27272a'
+                    }}
+                  />
+                </div>
+
+                {/* Comments */}
+                <div className="relative">
+                  <label className="block text-sm font-medium mb-2" style={{ color: '#d4d4d8' }}>
+                    Additional Notes & Comments
+                  </label>
+                  <textarea
+                    value={formData.comments}
+                    onChange={(e) => handleInputChange('comments', e.target.value)}
+                    onFocus={() => setFocusedField('comments')}
+                    onBlur={() => setFocusedField(null)}
+                    placeholder="Key contacts, relationship notes, important context, or other details..."
+                    rows={4}
+                    className="w-full px-5 py-4 rounded-xl text-white focus:outline-none transition-all duration-300 resize-none focus-glow"
+                    style={{ 
+                      background: 'rgba(24, 24, 27, 0.5)', 
+                      border: '1px solid #27272a',
+                      borderColor: focusedField === 'comments' ? 'rgba(168, 85, 247, 0.5)' : '#27272a'
+                    }}
+                  />
+                </div>
+              </section>
+
+              {/* Submit Button */}
+              <div className="pt-6">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="relative w-full group"
+                >
+                  <div 
+                    className="relative flex items-center justify-center gap-3 px-8 py-5 rounded-xl font-semibold text-lg transition-all duration-300"
+                    style={{ 
+                      background: isSubmitting ? '#27272a' : 'linear-gradient(to right, #f97316, #f59e0b, #eab308)',
+                      color: isSubmitting ? '#71717a' : 'white',
+                      cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                      boxShadow: isSubmitting ? 'none' : '0 20px 50px rgba(249, 115, 22, 0.3)',
+                      transform: isSubmitting ? 'none' : 'translateY(0)'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isSubmitting) {
+                        e.currentTarget.style.boxShadow = '0 25px 60px rgba(249, 115, 22, 0.5)';
+                        e.currentTarget.style.transform = 'scale(1.02)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isSubmitting) {
+                        e.currentTarget.style.boxShadow = '0 20px 50px rgba(249, 115, 22, 0.3)';
+                        e.currentTarget.style.transform = 'scale(1)';
+                      }
+                    }}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        <span>Saving to Google Sheets...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Save Client Record</span>
+                        <svg className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
+                      </>
+                    )}
+                  </div>
+                </button>
+              </div>
+
+              {/* Status Messages */}
+              {submitStatus && (
+                <div 
+                  className="flex items-center gap-3 px-5 py-4 rounded-xl"
+                  style={{ 
+                    background: submitStatus === 'success' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                    border: `1px solid ${submitStatus === 'success' ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                    color: submitStatus === 'success' ? '#4ade80' : '#f87171'
+                  }}
+                >
+                  {submitStatus === 'success' ? (
+                    <>
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>Record saved successfully! Data synced to Google Sheets.</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span>Error saving record. Please try again.</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </form>
+
+            {/* Footer */}
+            <footer className="mt-16 pt-8 text-center" style={{ borderTop: '1px solid rgba(39, 39, 42, 0.5)' }}>
+              <p className="text-sm" style={{ color: '#52525b' }}>
+                Data stored in Google Sheets • Single source of truth for client relationships
+              </p>
+            </footer>
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.render(<TrailblazeClientPortal />, document.getElementById('root'));
+  </script>
+</body>
+</html>
