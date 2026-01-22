@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trailblaze Labs - Client Dossier Builder</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Plus Jakarta Sans', sans-serif; }
+    body { background: #0a0a0f; margin: 0; }
+    
+    @keyframes float {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-20px) scale(1.02); }
+    }
+    
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.15; }
+      50% { opacity: 0.25; }
+    }
+    
+    @keyframes confetti-fall {
+      0% { transform: translateY(-100%) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+    }
+    
+    @keyframes celebrate {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    
+    @keyframes checkmark {
+      0% { stroke-dashoffset: 100; }
+      100% { stroke-dashoffset: 0; }
+    }
+    
+    .float-orb { animation: float 8s ease-in-out infinite; }
+    .float-orb-2 { animation: float 12s ease-in-out infinite; animation-delay: 2s; }
+    .float-orb-3 { animation: float 10s ease-in-out infinite; animation-delay: 4s; }
+    .pulse-glow { animation: pulse-glow 4s ease-in-out infinite; }
+    .celebrate { animation: celebrate 0.5s ease-in-out; }
+    
+    .confetti {
+      position: fixed;
+      width: 10px;
+      height: 10px;
+      top: -10px;
+      animation: confetti-fall 3s ease-out forwards;
+    }
+    
+    .noise-overlay {
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      mix-blend-mode: overlay;
+    }
+    
+    .grid-bg {
+      background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), 
+                        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+    
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2371717a'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 1rem center;
+      background-size: 1.5rem;
+    }
+    
+    .focus-glow { transition: box-shadow 0.3s ease; }
+    .focus-glow:focus { box-shadow: 0 0 30px rgba(249, 115, 22, 0.15); }
+    
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .animate-spin { animation: spin 1s linear infinite; }
+    
+    @keyframes dot-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .dot-pulse { animation: dot-pulse 2s ease-in-out infinite; }
+    
+    .progress-ring { transition: stroke-dashoffset 0.5s ease; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // ============================================
+    // CONFIGURATION - Admin can add orgs here
+    // ============================================
+    const ORGANIZATIONS = [
+      { id: 'maverick', name: 'Maverick' },
+      { id: 'guide', name: 'Guide' },
+      { id: 'csc', name: 'CSC' },
+      { id: 'actus', name: 'Actus' },
+      { id: 'evolve', name: 'Evolve' }
+    ];
+    
+    // Google Apps Script URL - Replace with your new sheet's script URL
+    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfFfQSTUa3cHQR34MjLm55qtAneFYmmgvMnULsx025D6Ni5hBUG86xweP_2XqF8XnsKQ/exec';
+    
+    // ============================================
+
+    const Confetti = ({ show }) => {
+      if (!show) return null;
+      
+      const colors = ['#f97316', '#f59e0b', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6'];
+      const confettiPieces = Array.from({ length: 50 }, (_, i) => ({
+        id: i,
+        left: Math.random() * 100,
+        delay: Math.random() * 2,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        size: Math.random() * 10 + 5
+      }));
+      
+      return (
+        <div className="fixed inset-0 pointer-events-none z-50">
+          {confettiPieces.map(piece => (
+            <div
+              key={piece.id}
+              className="confetti"
+              style={{
+                left: `${piece.left}%`,
+                animationDelay: `${piece.delay}s`,
+                backgroundColor: piece.color,
+                width: piece.size,
+                height: piece.size,
+                borderRadius: Math.random() > 0.5 ? '50%' : '0'
+              }}
+            />
+          ))}
+        </div>
+      );
+    };
+
+    const ProgressRing = ({ progress, size = 120, strokeWidth = 8 }) => {
+      const radius = (size - strokeWidth) / 2;
+      const circumference = radius * 2 * Math.PI;
+      const offset = circumference - (progress / 100) * circumference;
+      
+      return (
+        <svg width={size} height={size} className="transform -rotate-90">
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="#27272a"
+            strokeWidth={strokeWidth}
+          />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="url(#progress-gradient)"
+            strokeWidth={strokeWidth}
+            strokeDasharray={circumference}
+            strokeDashoffset={offset}
+            strokeLinecap="round"
+            className="progress-ring"
+          />
+          <defs>
+            <linearGradient id="progress-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#f97316" />
+              <stop offset="50%" stopColor="#f59e0b" />
+              <stop offset="100%" stopColor="#22c55e" />
+            </linearGradient>
+          </defs>
+        </svg>
+      );
+    };
+
+    const BryceDossierApp = () => {
+      const [completedOrgs, setCompletedOrgs] = useState(() => {
+        const saved = localStorage.getItem('bryce-completed-orgs');
+        return saved ? JSON.parse(saved) : {};
+      });
+      
+      const [selectedOrg, setSelectedOrg] = useState('');
+      const [isEditing, setIsEditing] = useState(false);
+      const [showConfetti, setShowConfetti] = useState(false);
+      const [justCompleted, setJustCompleted] = useState(null);
+      
+      const [formData, setFormData] = useState({
+        engagementMonth: '',
+        engagementYear: new Date().getFullYear().toString(),
+        practices: { education: false, strategy: false, builds: false },
+        workDelivered: '',
+        activeWork: '',
+        futureWork: '',
+        comments: ''
+      });
+      
+      const [isSubmitting, setIsSubmitting] = useState(false);
+      const [submitStatus, setSubmitStatus] = useState(null);
+      const [focusedField, setFocusedField] = useState(null);
+
+      const months = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+      const years = Array.from({ length: 10 }, (_, i) => (new Date().getFullYear() - i).toString());
+
+      const completedCount = Object.keys(completedOrgs).length;
+      const totalCount = ORGANIZATIONS.length;
+      const progress = (completedCount / totalCount) * 100;
+      const remainingOrgs = ORGANIZATIONS.filter(org => !completedOrgs[org.id]);
+      const allComplete = completedCount === totalCount;
+
+      useEffect(() => {
+        localStorage.setItem('bryce-completed-orgs', JSON.stringify(completedOrgs));
+      }, [completedOrgs]);
+
+      const getMotivationalMessage = () => {
+        if (allComplete) return "🏆 Mission accomplished! All dossiers complete.";
+        if (completedCount === 0) return "Let's get started! Pick your first organization.";
+        if (completedCount === 1) return "Great start! You're building momentum.";
+        if (completedCount === 2) return "Nice work! Almost halfway there.";
+        if (completedCount === 3) return "Over halfway! The finish line is in sight.";
+        if (completedCount === 4) return "One more to go! You've got this.";
+        return "Keep going!";
+      };
+
+      const handleOrgSelect = (orgId) => {
+        setSelectedOrg(orgId);
+        setSubmitStatus(null);
+        
+        if (completedOrgs[orgId]) {
+          // Load existing data for editing
+          setFormData(completedOrgs[orgId]);
+          setIsEditing(true);
+        } else {
+          // Reset form for new entry
+          setFormData({
+            engagementMonth: '',
+            engagementYear: new Date().getFullYear().toString(),
+            practices: { education: false, strategy: false, builds: false },
+            workDelivered: '',
+            activeWork: '',
+            futureWork: '',
+            comments: ''
+          });
+          setIsEditing(false);
+        }
+      };
+
+      const handleInputChange = (field, value) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+      };
+
+      const handlePracticeToggle = (practice) => {
+        setFormData(prev => ({
+          ...prev,
+          practices: { ...prev.practices, [practice]: !prev.practices[practice] }
+        }));
+      };
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        setSubmitStatus(null);
+
+        const practicesArray = [];
+        if (formData.practices.education) practicesArray.push('Education & Training');
+        if (formData.practices.strategy) practicesArray.push('Strategy & Fractional Leadership');
+        if (formData.practices.builds) practicesArray.push('Builds & Projects');
+
+        const orgName = ORGANIZATIONS.find(o => o.id === selectedOrg)?.name || selectedOrg;
+        
+        const submissionData = {
+          timestamp: new Date().toISOString(),
+          clientName: orgName,
+          engagementDate: `${formData.engagementMonth} ${formData.engagementYear}`,
+          practices: practicesArray.join(', '),
+          workDelivered: formData.workDelivered,
+          activeWork: formData.activeWork,
+          futureWork: formData.futureWork,
+          comments: formData.comments,
+          submittedBy: 'Bryce',
+          isUpdate: isEditing
+        };
+
+        try {
+          if (GOOGLE_SCRIPT_URL !== 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
+            await fetch(GOOGLE_SCRIPT_URL, {
+              method: 'POST',
+              mode: 'no-cors',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(submissionData)
+            });
+          } else {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            console.log('Demo mode - Submission:', submissionData);
+          }
+          
+          const wasNewCompletion = !completedOrgs[selectedOrg];
+          
+          // Save to completed orgs
+          setCompletedOrgs(prev => ({
+            ...prev,
+            [selectedOrg]: formData
+          }));
+          
+          setSubmitStatus('success');
+          
+          // Celebration for new completions
+          if (wasNewCompletion) {
+            setJustCompleted(selectedOrg);
+            setShowConfetti(true);
+            setTimeout(() => {
+              setShowConfetti(false);
+              setJustCompleted(null);
+            }, 3000);
+          }
+          
+          // Reset selection after brief delay
+          setTimeout(() => {
+            setSelectedOrg('');
+            setIsEditing(false);
+          }, 2000);
+          
+        } catch (error) {
+          console.error('Submission error:', error);
+          setSubmitStatus('error');
+        } finally {
+          setIsSubmitting(false);
+        }
+      };
+
+      const practiceCards = [
+        { id: 'education', title: 'Education & Training', description: 'Workshops, enablement, AI literacy',
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342" /></svg>
+        },
+        { id: 'strategy', title: 'Strategy & Fractional Leadership', description: 'Roadmaps, advising, planning',
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605" /></svg>
+        },
+        { id: 'builds', title: 'Builds & Projects', description: 'Custom solutions, implementations',
+          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z" /></svg>
+        }
+      ];
+
+      return (
+        <div className="min-h-screen text-white overflow-hidden relative" style={{ background: '#0a0a0f' }}>
+          <Confetti show={showConfetti} />
+          
+          {/* Background */}
+          <div className="fixed inset-0 overflow-hidden pointer-events-none">
+            <div className="float-orb absolute w-[600px] h-[600px] rounded-full blur-3xl pulse-glow" style={{ top: '-20%', left: '-10%', background: 'linear-gradient(to bottom right, rgba(249, 115, 22, 0.2), rgba(239, 68, 68, 0.1), transparent)' }} />
+            <div className="float-orb-2 absolute w-[800px] h-[800px] rounded-full blur-3xl pulse-glow" style={{ bottom: '-30%', right: '-15%', background: 'linear-gradient(to top left, rgba(245, 158, 11, 0.15), rgba(234, 88, 12, 0.1), transparent)' }} />
+            <div className="float-orb-3 absolute w-[400px] h-[400px] rounded-full blur-3xl pulse-glow" style={{ top: '40%', right: '10%', background: 'linear-gradient(to bottom left, rgba(234, 179, 8, 0.1), rgba(249, 115, 22, 0.05), transparent)' }} />
+            <div className="absolute inset-0 grid-bg opacity-30" />
+            <div className="absolute inset-0 noise-overlay opacity-40" />
+          </div>
+
+          <div className="relative z-10 max-w-4xl mx-auto px-6 py-8">
+            {/* Header */}
+            <header className="text-center mb-8">
+              <div className="inline-flex items-center gap-3 mb-4">
+                <div className="relative">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(to bottom right, #f97316, #f59e0b, #eab308)', boxShadow: '0 10px 40px rgba(249, 115, 22, 0.3)' }}>
+                    <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6 text-white">
+                      <path d="M12 2L4 7v10l8 5 8-5V7l-8-5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" fill="rgba(255,255,255,0.1)"/>
+                      <path d="M12 6v12M8 8.5l4 2.5 4-2.5M8 15.5l4-2.5 4 2.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                  </div>
+                </div>
+                <span className="text-xl font-bold tracking-tight">
+                  <span className="text-white">Trailblaze</span>
+                  <span style={{ color: '#fb923c' }}> Labs</span>
+                </span>
+              </div>
+              
+              <h1 className="text-3xl md:text-4xl font-bold mb-2" style={{ background: 'linear-gradient(to right, white, #fed7aa, #fdba74)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                Hey Bryce 👋
+              </h1>
+              <p className="text-base max-w-xl mx-auto" style={{ color: '#a1a1aa' }}>
+                Let's build out the client dossiers. {getMotivationalMessage()}
+              </p>
+            </header>
+
+            {/* Progress Section */}
+            <div className={`mb-8 p-6 rounded-2xl border transition-all duration-500 ${allComplete ? 'celebrate' : ''}`} style={{ 
+              background: allComplete ? 'linear-gradient(to right, rgba(34, 197, 94, 0.1), rgba(34, 197, 94, 0.05))' : 'rgba(24, 24, 27, 0.5)', 
+              border: `1px solid ${allComplete ? 'rgba(34, 197, 94, 0.3)' : '#27272a'}` 
+            }}>
+              <div className="flex items-center justify-between gap-6">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-3">
+                    <h2 className="text-lg font-semibold">Progress</h2>
+                    <span className="px-3 py-1 rounded-full text-sm font-medium" style={{ 
+                      background: allComplete ? 'rgba(34, 197, 94, 0.2)' : 'rgba(249, 115, 22, 0.2)', 
+                      color: allComplete ? '#4ade80' : '#fb923c' 
+                    }}>
+                      {completedCount} of {totalCount}
+                    </span>
+                  </div>
+                  
+                  {/* Organization Pills */}
+                  <div className="flex flex-wrap gap-2">
+                    {ORGANIZATIONS.map(org => {
+                      const isComplete = !!completedOrgs[org.id];
+                      const isJustCompleted = justCompleted === org.id;
+                      return (
+                        <button
+                          key={org.id}
+                          onClick={() => handleOrgSelect(org.id)}
+                          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-300 flex items-center gap-1.5 ${isJustCompleted ? 'celebrate' : ''}`}
+                          style={{
+                            background: isComplete ? 'rgba(34, 197, 94, 0.2)' : 'rgba(39, 39, 42, 0.8)',
+                            border: `1px solid ${isComplete ? 'rgba(34, 197, 94, 0.4)' : '#3f3f46'}`,
+                            color: isComplete ? '#4ade80' : '#a1a1aa'
+                          }}
+                        >
+                          {isComplete && (
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                          {org.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                
+                {/* Progress Ring */}
+                <div className="relative flex-shrink-0">
+                  <ProgressRing progress={progress} size={100} strokeWidth={8} />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-2xl font-bold" style={{ color: allComplete ? '#4ade80' : '#fb923c' }}>
+                      {Math.round(progress)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Form Section */}
+            {!allComplete && !selectedOrg && (
+              <div className="text-center py-12">
+                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4" style={{ background: 'rgba(249, 115, 22, 0.1)', border: '1px solid rgba(249, 115, 22, 0.3)' }}>
+                  <svg className="w-8 h-8" style={{ color: '#fb923c' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.042 21.672 13.684 16.6m0 0-2.51 2.225.569-9.47 5.227 7.917-3.286-.672ZM12 2.25V4.5m5.834.166-1.591 1.591M20.25 10.5H18M7.757 14.743l-1.59 1.59M6 10.5H3.75m4.007-4.243-1.59-1.59" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-semibold mb-2">Select an Organization</h3>
+                <p style={{ color: '#71717a' }}>Click any organization above to start or edit its dossier</p>
+              </div>
+            )}
+
+            {allComplete && !selectedOrg && (
+              <div className="text-center py-12">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full mb-4" style={{ background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
+                  <svg className="w-10 h-10" style={{ color: '#4ade80' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
+                  </svg>
+                </div>
+                <h3 className="text-2xl font-bold mb-2" style={{ color: '#4ade80' }}>All Dossiers Complete! 🎉</h3>
+                <p style={{ color: '#a1a1aa' }} className="mb-4">Amazing work, Bryce. Click any organization above to review or edit.</p>
+              </div>
+            )}
+
+            {selectedOrg && (
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold flex items-center gap-2">
+                    {isEditing && <span className="text-sm px-2 py-0.5 rounded-full" style={{ background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa' }}>Editing</span>}
+                    {ORGANIZATIONS.find(o => o.id === selectedOrg)?.name}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedOrg(''); setIsEditing(false); }}
+                    className="text-sm px-3 py-1.5 rounded-lg transition-colors"
+                    style={{ color: '#a1a1aa', background: 'rgba(39, 39, 42, 0.5)' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                {/* Engagement Date */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{ color: '#d4d4d8' }}>Engagement Start Month</label>
+                    <select
+                      value={formData.engagementMonth}
+                      onChange={(e) => handleInputChange('engagementMonth', e.target.value)}
+                      required
+                      className="w-full px-4 py-3 rounded-xl text-white focus:outline-none transition-all duration-300 cursor-pointer appearance-none focus-glow"
+                      style={{ background: 'rgba(24, 24, 27, 0.5)', border: '1px solid #27272a' }}
+                    >
+                      <option value="" disabled>Month</option>
+                      {months.map(month => <option key={month} value={month} style={{ background: '#18181b' }}>{month}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2" style={{ color: '#d4d4d8' }}>Year</label>
+                    <select
+                      value={formData.engagementYear}
+                      onChange={(e) => handleInputChange('engagementYear', e.target.value)}
+                      required
+                      className="w-full px-4 py-3 rounded-xl text-white focus:outline-none transition-all duration-300 cursor-pointer appearance-none focus-glow"
+                      style={{ background: 'rgba(24, 24, 27, 0.5)', border: '1px solid #27272a' }}
+                    >
+                      {years.map(year => <option key={year} value={year} style={{ background: '#18181b' }}>{year}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Practice Areas */}
+                <div>
+                  <label className="block text-sm font-medium mb-3" style={{ color: '#d4d4d8' }}>Practice Areas</label>
+                  <div className="grid gap-2">
+                    {practiceCards.map((practice) => (
+                      <button
+                        key={practice.id}
+                        type="button"
+                        onClick={() => handlePracticeToggle(practice.id)}
+                        className="flex items-center gap-3 p-3 rounded-xl transition-all duration-300 text-left"
+                        style={{
+                          background: formData.practices[practice.id] ? 'linear-gradient(to right, rgba(249, 115, 22, 0.1), rgba(245, 158, 11, 0.05))' : 'rgba(24, 24, 27, 0.3)',
+                          border: `1px solid ${formData.practices[practice.id] ? 'rgba(249, 115, 22, 0.5)' : '#27272a'}`
+                        }}
+                      >
+                        <div className="w-5 h-5 rounded flex items-center justify-center" style={{
+                          background: formData.practices[practice.id] ? 'linear-gradient(to bottom right, #f97316, #f59e0b)' : 'transparent',
+                          border: `2px solid ${formData.practices[practice.id] ? '#f97316' : '#3f3f46'}`
+                        }}>
+                          {formData.practices[practice.id] && (
+                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <span className="font-medium" style={{ color: formData.practices[practice.id] ? 'white' : '#d4d4d8' }}>{practice.title}</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Work Fields */}
+                {[
+                  { key: 'workDelivered', label: 'Work Delivered', color: '#22c55e', placeholder: 'Completed deliverables and outcomes...' },
+                  { key: 'activeWork', label: 'Active Work Underway', color: '#f97316', placeholder: 'Current projects and engagements...', pulse: true },
+                  { key: 'futureWork', label: 'Potential Future Work', color: '#3b82f6', placeholder: 'Opportunities and proposed projects...' },
+                  { key: 'comments', label: 'Other Comments', color: '#a855f7', placeholder: 'Key contacts, relationship notes...' }
+                ].map(field => (
+                  <div key={field.key}>
+                    <label className="block text-sm font-medium mb-2" style={{ color: '#d4d4d8' }}>
+                      <span className="inline-flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${field.pulse ? 'dot-pulse' : ''}`} style={{ background: field.color }} />
+                        {field.label}
+                      </span>
+                    </label>
+                    <textarea
+                      value={formData[field.key]}
+                      onChange={(e) => handleInputChange(field.key, e.target.value)}
+                      placeholder={field.placeholder}
+                      rows={2}
+                      className="w-full px-4 py-3 rounded-xl text-white focus:outline-none transition-all duration-300 resize-none focus-glow"
+                      style={{ background: 'rgba(24, 24, 27, 0.5)', border: '1px solid #27272a' }}
+                    />
+                  </div>
+                ))}
+
+                {/* Submit */}
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full relative group"
+                >
+                  <div
+                    className="flex items-center justify-center gap-3 px-6 py-4 rounded-xl font-semibold transition-all duration-300"
+                    style={{
+                      background: isSubmitting ? '#27272a' : 'linear-gradient(to right, #f97316, #f59e0b, #eab308)',
+                      color: isSubmitting ? '#71717a' : 'white',
+                      cursor: isSubmitting ? 'not-allowed' : 'pointer',
+                      boxShadow: isSubmitting ? 'none' : '0 20px 50px rgba(249, 115, 22, 0.3)'
+                    }}
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <span>{isEditing ? 'Update Dossier' : 'Complete Dossier'}</span>
+                    )}
+                  </div>
+                </button>
+
+                {submitStatus === 'success' && (
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: 'rgba(34, 197, 94, 0.1)', border: '1px solid rgba(34, 197, 94, 0.3)', color: '#4ade80' }}>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>{isEditing ? 'Dossier updated!' : 'Dossier complete! Nice work! 🎉'}</span>
+                  </div>
+                )}
+
+                {submitStatus === 'error' && (
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171' }}>
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>Error saving. Please try again.</span>
+                  </div>
+                )}
+              </form>
+            )}
+
+            {/* Footer */}
+            <footer className="mt-12 pt-6 text-center" style={{ borderTop: '1px solid rgba(39, 39, 42, 0.5)' }}>
+              <p className="text-xs" style={{ color: '#52525b' }}>
+                Trailblaze Labs • Client Dossier Builder
+              </p>
+            </footer>
+          </div>
+        </div>
+      );
+    };
+
+    ReactDOM.render(<BryceDossierApp />, document.getElementById('root'));
+  </script>
+</body>
+</html>
