@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -33,11 +34,6 @@
     @keyframes celebrate {
       0%, 100% { transform: scale(1); }
       50% { transform: scale(1.05); }
-    }
-    
-    @keyframes checkmark {
-      0% { stroke-dashoffset: 100; }
-      100% { stroke-dashoffset: 0; }
     }
     
     .float-orb { animation: float 8s ease-in-out infinite; }
@@ -94,24 +90,22 @@
     const { useState, useEffect } = React;
 
     // ============================================
-    // CONFIGURATION - Admin can add orgs here
+    // CONFIGURATION
     // ============================================
-    const ORGANIZATIONS = [
+    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfFfQSTUa3cHQR34MjLm55qtAneFYmmgvMnULsx025D6Ni5hBUG86xweP_2XqF8XnsKQ/exec';
+    
+    // Default orgs (fallback if sheet is empty or unavailable)
+    const DEFAULT_ORGANIZATIONS = [
       { id: 'maverick', name: 'Maverick' },
       { id: 'guide', name: 'Guide' },
       { id: 'csc', name: 'CSC' },
       { id: 'actus', name: 'Actus' },
       { id: 'evolve', name: 'Evolve' }
     ];
-    
-    // Google Apps Script URL - Replace with your new sheet's script URL
-    const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfFfQSTUa3cHQR34MjLm55qtAneFYmmgvMnULsx025D6Ni5hBUG86xweP_2XqF8XnsKQ/exec';
-    
     // ============================================
 
     const Confetti = ({ show }) => {
       if (!show) return null;
-      
       const colors = ['#f97316', '#f59e0b', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6'];
       const confettiPieces = Array.from({ length: 50 }, (_, i) => ({
         id: i,
@@ -120,22 +114,10 @@
         color: colors[Math.floor(Math.random() * colors.length)],
         size: Math.random() * 10 + 5
       }));
-      
       return (
         <div className="fixed inset-0 pointer-events-none z-50">
           {confettiPieces.map(piece => (
-            <div
-              key={piece.id}
-              className="confetti"
-              style={{
-                left: `${piece.left}%`,
-                animationDelay: `${piece.delay}s`,
-                backgroundColor: piece.color,
-                width: piece.size,
-                height: piece.size,
-                borderRadius: Math.random() > 0.5 ? '50%' : '0'
-              }}
-            />
+            <div key={piece.id} className="confetti" style={{ left: `${piece.left}%`, animationDelay: `${piece.delay}s`, backgroundColor: piece.color, width: piece.size, height: piece.size, borderRadius: Math.random() > 0.5 ? '50%' : '0' }} />
           ))}
         </div>
       );
@@ -145,29 +127,10 @@
       const radius = (size - strokeWidth) / 2;
       const circumference = radius * 2 * Math.PI;
       const offset = circumference - (progress / 100) * circumference;
-      
       return (
         <svg width={size} height={size} className="transform -rotate-90">
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke="#27272a"
-            strokeWidth={strokeWidth}
-          />
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke="url(#progress-gradient)"
-            strokeWidth={strokeWidth}
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            strokeLinecap="round"
-            className="progress-ring"
-          />
+          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#27272a" strokeWidth={strokeWidth} />
+          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="url(#progress-gradient)" strokeWidth={strokeWidth} strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" className="progress-ring" />
           <defs>
             <linearGradient id="progress-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stopColor="#f97316" />
@@ -180,19 +143,24 @@
     };
 
     const BryceDossierApp = () => {
+      const [organizations, setOrganizations] = useState(DEFAULT_ORGANIZATIONS);
       const [completedOrgs, setCompletedOrgs] = useState(() => {
-        const saved = localStorage.getItem('bryce-completed-orgs');
+        const saved = localStorage.getItem('bryce-completed-orgs-v2');
         return saved ? JSON.parse(saved) : {};
       });
-      
+      const [isLoadingOrgs, setIsLoadingOrgs] = useState(true);
       const [selectedOrg, setSelectedOrg] = useState('');
       const [isEditing, setIsEditing] = useState(false);
       const [showConfetti, setShowConfetti] = useState(false);
       const [justCompleted, setJustCompleted] = useState(null);
+      const [showAddOrg, setShowAddOrg] = useState(false);
+      const [newOrgName, setNewOrgName] = useState('');
+      const [isAddingOrg, setIsAddingOrg] = useState(false);
       
       const [formData, setFormData] = useState({
         engagementMonth: '',
         engagementYear: new Date().getFullYear().toString(),
+        status: 'Client',
         practices: { education: false, strategy: false, builds: false },
         workDelivered: '',
         activeWork: '',
@@ -204,29 +172,44 @@
       const [submitStatus, setSubmitStatus] = useState(null);
       const [focusedField, setFocusedField] = useState(null);
 
-      const months = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December'
-      ];
+      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
       const years = Array.from({ length: 10 }, (_, i) => (new Date().getFullYear() - i).toString());
 
       const completedCount = Object.keys(completedOrgs).length;
-      const totalCount = ORGANIZATIONS.length;
-      const progress = (completedCount / totalCount) * 100;
-      const remainingOrgs = ORGANIZATIONS.filter(org => !completedOrgs[org.id]);
-      const allComplete = completedCount === totalCount;
+      const totalCount = organizations.length;
+      const progress = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+      const allComplete = completedCount === totalCount && totalCount > 0;
+
+      // Load organizations from Google Sheet on mount
+      useEffect(() => {
+        const loadOrganizations = async () => {
+          try {
+            const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getOrgs`);
+            const data = await response.json();
+            if (data.organizations && data.organizations.length > 0) {
+              setOrganizations(data.organizations);
+            }
+          } catch (error) {
+            console.log('Using default organizations:', error);
+          } finally {
+            setIsLoadingOrgs(false);
+          }
+        };
+        loadOrganizations();
+      }, []);
 
       useEffect(() => {
-        localStorage.setItem('bryce-completed-orgs', JSON.stringify(completedOrgs));
+        localStorage.setItem('bryce-completed-orgs-v2', JSON.stringify(completedOrgs));
       }, [completedOrgs]);
 
       const getMotivationalMessage = () => {
         if (allComplete) return "🏆 Mission accomplished! All dossiers complete.";
         if (completedCount === 0) return "Let's get started! Pick your first organization.";
-        if (completedCount === 1) return "Great start! You're building momentum.";
-        if (completedCount === 2) return "Nice work! Almost halfway there.";
-        if (completedCount === 3) return "Over halfway! The finish line is in sight.";
-        if (completedCount === 4) return "One more to go! You've got this.";
+        const pct = (completedCount / totalCount) * 100;
+        if (pct < 25) return "Great start! You're building momentum.";
+        if (pct < 50) return "Nice work! Making solid progress.";
+        if (pct < 75) return "Over halfway! The finish line is in sight.";
+        if (pct < 100) return "Almost there! Just a few more to go.";
         return "Keep going!";
       };
 
@@ -235,14 +218,13 @@
         setSubmitStatus(null);
         
         if (completedOrgs[orgId]) {
-          // Load existing data for editing
           setFormData(completedOrgs[orgId]);
           setIsEditing(true);
         } else {
-          // Reset form for new entry
           setFormData({
             engagementMonth: '',
             engagementYear: new Date().getFullYear().toString(),
+            status: 'Client',
             practices: { education: false, strategy: false, builds: false },
             workDelivered: '',
             activeWork: '',
@@ -264,6 +246,37 @@
         }));
       };
 
+      const handleAddOrg = async () => {
+        if (!newOrgName.trim()) return;
+        
+        setIsAddingOrg(true);
+        const orgId = newOrgName.trim().toLowerCase().replace(/\s+/g, '-');
+        const orgName = newOrgName.trim();
+        
+        try {
+          // Save to Google Sheet
+          await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'addOrg',
+              orgId: orgId,
+              orgName: orgName
+            })
+          });
+          
+          // Add to local state
+          setOrganizations(prev => [...prev, { id: orgId, name: orgName }]);
+          setNewOrgName('');
+          setShowAddOrg(false);
+        } catch (error) {
+          console.error('Error adding org:', error);
+        } finally {
+          setIsAddingOrg(false);
+        }
+      };
+
       const handleSubmit = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
@@ -274,11 +287,14 @@
         if (formData.practices.strategy) practicesArray.push('Strategy & Fractional Leadership');
         if (formData.practices.builds) practicesArray.push('Builds & Projects');
 
-        const orgName = ORGANIZATIONS.find(o => o.id === selectedOrg)?.name || selectedOrg;
+        const org = organizations.find(o => o.id === selectedOrg);
+        const orgName = org?.name || selectedOrg;
         
         const submissionData = {
+          action: 'submitDossier',
           timestamp: new Date().toISOString(),
           clientName: orgName,
+          status: formData.status,
           engagementDate: `${formData.engagementMonth} ${formData.engagementYear}`,
           practices: practicesArray.join(', '),
           workDelivered: formData.workDelivered,
@@ -290,21 +306,15 @@
         };
 
         try {
-          if (GOOGLE_SCRIPT_URL !== 'YOUR_GOOGLE_APPS_SCRIPT_URL_HERE') {
-            await fetch(GOOGLE_SCRIPT_URL, {
-              method: 'POST',
-              mode: 'no-cors',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(submissionData)
-            });
-          } else {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            console.log('Demo mode - Submission:', submissionData);
-          }
+          await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(submissionData)
+          });
           
           const wasNewCompletion = !completedOrgs[selectedOrg];
           
-          // Save to completed orgs
           setCompletedOrgs(prev => ({
             ...prev,
             [selectedOrg]: formData
@@ -312,7 +322,6 @@
           
           setSubmitStatus('success');
           
-          // Celebration for new completions
           if (wasNewCompletion) {
             setJustCompleted(selectedOrg);
             setShowConfetti(true);
@@ -322,7 +331,6 @@
             }, 3000);
           }
           
-          // Reset selection after brief delay
           setTimeout(() => {
             setSelectedOrg('');
             setIsEditing(false);
@@ -337,16 +345,24 @@
       };
 
       const practiceCards = [
-        { id: 'education', title: 'Education & Training', description: 'Workshops, enablement, AI literacy',
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342" /></svg>
-        },
-        { id: 'strategy', title: 'Strategy & Fractional Leadership', description: 'Roadmaps, advising, planning',
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605" /></svg>
-        },
-        { id: 'builds', title: 'Builds & Projects', description: 'Custom solutions, implementations',
-          icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z" /></svg>
-        }
+        { id: 'education', title: 'Education & Training', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342" /></svg> },
+        { id: 'strategy', title: 'Strategy & Fractional Leadership', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605" /></svg> },
+        { id: 'builds', title: 'Builds & Projects', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17 17.25 21A2.652 2.652 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z" /></svg> }
       ];
+
+      if (isLoadingOrgs) {
+        return (
+          <div className="min-h-screen flex items-center justify-center" style={{ background: '#0a0a0f' }}>
+            <div className="text-center">
+              <svg className="animate-spin h-8 w-8 mx-auto mb-4" style={{ color: '#fb923c' }} viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+              </svg>
+              <p style={{ color: '#a1a1aa' }}>Loading organizations...</p>
+            </div>
+          </div>
+        );
+      }
 
       return (
         <div className="min-h-screen text-white overflow-hidden relative" style={{ background: '#0a0a0f' }}>
@@ -406,18 +422,26 @@
                   
                   {/* Organization Pills */}
                   <div className="flex flex-wrap gap-2">
-                    {ORGANIZATIONS.map(org => {
+                    {organizations.map(org => {
                       const isComplete = !!completedOrgs[org.id];
                       const isJustCompleted = justCompleted === org.id;
+                      const savedStatus = completedOrgs[org.id]?.status;
+                      const isProspect = savedStatus === 'Prospect';
                       return (
                         <button
                           key={org.id}
                           onClick={() => handleOrgSelect(org.id)}
                           className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-300 flex items-center gap-1.5 ${isJustCompleted ? 'celebrate' : ''}`}
                           style={{
-                            background: isComplete ? 'rgba(34, 197, 94, 0.2)' : 'rgba(39, 39, 42, 0.8)',
-                            border: `1px solid ${isComplete ? 'rgba(34, 197, 94, 0.4)' : '#3f3f46'}`,
-                            color: isComplete ? '#4ade80' : '#a1a1aa'
+                            background: isComplete 
+                              ? (isProspect ? 'rgba(59, 130, 246, 0.2)' : 'rgba(34, 197, 94, 0.2)') 
+                              : 'rgba(39, 39, 42, 0.8)',
+                            border: `1px solid ${isComplete 
+                              ? (isProspect ? 'rgba(59, 130, 246, 0.4)' : 'rgba(34, 197, 94, 0.4)') 
+                              : '#3f3f46'}`,
+                            color: isComplete 
+                              ? (isProspect ? '#60a5fa' : '#4ade80') 
+                              : '#a1a1aa'
                           }}
                         >
                           {isComplete && (
@@ -426,9 +450,28 @@
                             </svg>
                           )}
                           {org.name}
+                          {isComplete && isProspect && (
+                            <span className="text-xs opacity-70">(P)</span>
+                          )}
                         </button>
                       );
                     })}
+                    
+                    {/* Add Organization Button */}
+                    <button
+                      onClick={() => setShowAddOrg(true)}
+                      className="px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-300 flex items-center gap-1.5"
+                      style={{
+                        background: 'transparent',
+                        border: '1px dashed #3f3f46',
+                        color: '#71717a'
+                      }}
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                      </svg>
+                      Add Org
+                    </button>
                   </div>
                 </div>
                 
@@ -444,7 +487,46 @@
               </div>
             </div>
 
-            {/* Form Section */}
+            {/* Add Organization Modal */}
+            {showAddOrg && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.8)' }}>
+                <div className="w-full max-w-md p-6 rounded-2xl" style={{ background: '#18181b', border: '1px solid #27272a' }}>
+                  <h3 className="text-xl font-semibold mb-4">Add New Organization</h3>
+                  <input
+                    type="text"
+                    value={newOrgName}
+                    onChange={(e) => setNewOrgName(e.target.value)}
+                    placeholder="Organization name"
+                    className="w-full px-4 py-3 rounded-xl text-white focus:outline-none mb-4"
+                    style={{ background: 'rgba(24, 24, 27, 0.5)', border: '1px solid #3f3f46' }}
+                    autoFocus
+                  />
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => { setShowAddOrg(false); setNewOrgName(''); }}
+                      className="flex-1 px-4 py-3 rounded-xl font-medium transition-all"
+                      style={{ background: '#27272a', color: '#a1a1aa' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleAddOrg}
+                      disabled={!newOrgName.trim() || isAddingOrg}
+                      className="flex-1 px-4 py-3 rounded-xl font-medium transition-all"
+                      style={{ 
+                        background: newOrgName.trim() ? 'linear-gradient(to right, #f97316, #f59e0b)' : '#27272a',
+                        color: newOrgName.trim() ? 'white' : '#71717a',
+                        cursor: newOrgName.trim() ? 'pointer' : 'not-allowed'
+                      }}
+                    >
+                      {isAddingOrg ? 'Adding...' : 'Add Organization'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Empty State */}
             {!allComplete && !selectedOrg && (
               <div className="text-center py-12">
                 <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4" style={{ background: 'rgba(249, 115, 22, 0.1)', border: '1px solid rgba(249, 115, 22, 0.3)' }}>
@@ -469,12 +551,13 @@
               </div>
             )}
 
+            {/* Form */}
             {selectedOrg && (
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-semibold flex items-center gap-2">
                     {isEditing && <span className="text-sm px-2 py-0.5 rounded-full" style={{ background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa' }}>Editing</span>}
-                    {ORGANIZATIONS.find(o => o.id === selectedOrg)?.name}
+                    {organizations.find(o => o.id === selectedOrg)?.name}
                   </h2>
                   <button
                     type="button"
@@ -486,10 +569,44 @@
                   </button>
                 </div>
 
+                {/* Client/Prospect Toggle */}
+                <div className="flex items-center gap-4">
+                  <span className="text-sm" style={{ color: '#a1a1aa' }}>Status:</span>
+                  <button
+                    type="button"
+                    onClick={() => handleInputChange('status', formData.status === 'Client' ? 'Prospect' : 'Client')}
+                    className="relative inline-flex items-center gap-2 px-1 py-1 rounded-full"
+                    style={{ background: 'rgba(24, 24, 27, 0.5)', border: '1px solid #27272a' }}
+                  >
+                    <span 
+                      className="px-4 py-2 rounded-full text-sm font-medium transition-all duration-300"
+                      style={{ 
+                        background: formData.status === 'Client' ? 'linear-gradient(to right, #22c55e, #16a34a)' : 'transparent',
+                        color: formData.status === 'Client' ? 'white' : '#71717a',
+                        boxShadow: formData.status === 'Client' ? '0 10px 30px rgba(34, 197, 94, 0.3)' : 'none'
+                      }}
+                    >
+                      Client
+                    </span>
+                    <span 
+                      className="px-4 py-2 rounded-full text-sm font-medium transition-all duration-300"
+                      style={{ 
+                        background: formData.status === 'Prospect' ? 'linear-gradient(to right, #3b82f6, #2563eb)' : 'transparent',
+                        color: formData.status === 'Prospect' ? 'white' : '#71717a',
+                        boxShadow: formData.status === 'Prospect' ? '0 10px 30px rgba(59, 130, 246, 0.3)' : 'none'
+                      }}
+                    >
+                      Prospect
+                    </span>
+                  </button>
+                </div>
+
                 {/* Engagement Date */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2" style={{ color: '#d4d4d8' }}>Engagement Start Month</label>
+                    <label className="block text-sm font-medium mb-2" style={{ color: '#d4d4d8' }}>
+                      {formData.status === 'Prospect' ? 'Pipeline Entry Month' : 'Engagement Start Month'}
+                    </label>
                     <select
                       value={formData.engagementMonth}
                       onChange={(e) => handleInputChange('engagementMonth', e.target.value)}
@@ -540,9 +657,7 @@
                             </svg>
                           )}
                         </div>
-                        <div className="flex-1">
-                          <span className="font-medium" style={{ color: formData.practices[practice.id] ? 'white' : '#d4d4d8' }}>{practice.title}</span>
-                        </div>
+                        <span className="font-medium" style={{ color: formData.practices[practice.id] ? 'white' : '#d4d4d8' }}>{practice.title}</span>
                       </button>
                     ))}
                   </div>
@@ -574,11 +689,7 @@
                 ))}
 
                 {/* Submit */}
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full relative group"
-                >
+                <button type="submit" disabled={isSubmitting} className="w-full relative group">
                   <div
                     className="flex items-center justify-center gap-3 px-6 py-4 rounded-xl font-semibold transition-all duration-300"
                     style={{
